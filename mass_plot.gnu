@@ -18,4 +18,5 @@ set autoscale # scale axes automatically
  plot "mass.dat" using 1:2 title 'Navarro, Frenk, White profile Mass' with lines lt rgb "purple"
  replot "mass.dat" using 1:3 title 'Dark Matter Mass, analytical formula' with lines lt rgb "red" 
  replot "mass.dat" using 1:4 title 'Hernquist profile, Luminous Mass with BCG' with lines lt rgb "black"
+ replot "mgas.dat" using 1:2 title 'Gas Mass' with lines lt rgb "green"
 

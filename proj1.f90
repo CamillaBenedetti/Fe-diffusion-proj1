@@ -2,7 +2,7 @@ program diffusion
 !constants
 real*8,parameter::pi=3.14159265359
 real*8,parameter::mSun = 1.989d33 !!Sun mass in g
-real*8,parameter::mEarth = 5.972d27 !!Earth mass in g
+!real*8,parameter::mEarth = 5.972d27 !!Earth mass in g
 real*8,parameter::kpc_to_cm = 3.084d21      !! 1 kpc !!
 real*8,parameter::au_to_cm=1.495978707d13   !! 1 AU !!
 real*8,parameter::years_to_seconds=3.156d7
@@ -47,7 +47,7 @@ amfeiniz(jmax), amfeobs(jmax), gradzfe(jmax), amfe(jmax), rhofedot(jmax)
 real*8,parameter::aml=7.5    !! this is the mass to light ratio 
 real*8,parameter::zfesol=1.8e-3 !Solar metallicity
 real*8,parameter::zfesn=0.744/1.4
-real*8,parameter::snu=0.5
+real*8,parameter::snu=1.1 !supernova unit  = number of SNIa per Luminosity per century [0.05-0.5] at present, slide 35
 real*8,parameter::tnow=13.7*1.e9*years_to_seconds
 real*8::lturb, kappa, vturb, slope
 
@@ -165,7 +165,7 @@ open(20,file='barfrac.dat')
 do j=2,jmax-1
    fbarr(j)=(mhern(j)+mgas(j))/(mnfw(j)+mgas(j)+mhern(j))
    fgasr(j)=(mgas(j))/(mnfw(j)+mgas(j)+mhern(j))
-   write(20,1100)r(j)/ckpc_to_cm, fbarr(j), fgasr(j)
+   write(20,1100)r(j)/kpc_to_cm, fbarr(j), fgasr(j)
 enddo
 close(20)
 1100 format(4(1pe12.4))
@@ -187,10 +187,10 @@ do j=1,jmax
    zfeobs(j)=zfesol*0.3*1.4*1.15*(2.2+x**3)/(1+x**3)/1.15  !Perseus! First approach: observed Fe profile from XMM Newton Data, reduced to fit Chandra obs slide 39
    zfeobs(j)=zfeobs(j) - zfeout   !! subtract background abundance to get the excess 
    zfeobs(j)=max(zfeobs(j),0.)
-   zfest(j)=1.*zfesol    !! set the stellar abundance !! for source 
-   zfe(j)=zfeobs(j)   !!0. !!zfeout !!zfeobs(j)  !! which initial zfe? !! used for adding diffusion and source
+   zfe(j)= zfeobs(j)  !!0. !!zfeout !!zfeobs(j)  !! which initial zfe? !! used for adding diffusion and source
    rhofe(j)=rho(j)*zfe(j)/1.4
    rhofeobs(j)=rho(j)*zfeobs(j)/1.4
+   zfest(j)=1.*zfesol    !! set the stellar abundance !! for source 
 enddo
 
 !! Calculate the initial excess of iron mass
@@ -205,9 +205,9 @@ enddo
 open(10,file='zfe_initial.dat')
 open(20,file='initial.dat',status='unknown')
 do j=1,jmax
-   write(10,1500)rr(j)/kpc_to_cm,zfe(j)/zfesol,zfeobs(j)/zfesol, &
+   write(10,1500)rr(j)/kpc_to_cm, zfe(j)/zfesol, zfeobs(j)/zfesol, &
                  r(j)/kpc_to_cm,amfeiniz(j)/mSun,amfeobs(j)/mSun
-   write(20,3001)rr(j)/kpc_to_cm+0.001,zfe(j)/zfesol,zfeobs(j)/zfesol
+   write(20,3001)rr(j)/kpc_to_cm,zfe(j)/zfesol,zfeobs(j)/zfesol
 enddo
 close(10)
 close(20)
@@ -216,8 +216,7 @@ close(20)
 
 !have to overplot quantities at pag 42 and compare
 
-!first check diffusin, then source alone, then combine
-! for now don't add the source term
+!first check diffusion, then source alone, then combine
 
 !! boundary conditions (outflows) at the grid border, before time integration
 zfe(1)=zfe(2)
@@ -232,6 +231,7 @@ vturb=260.e5   !! like Perseus !! turbulent velocity
 lturb=15.*kpc_to_cm  !! this is quite uncertain !! turbulence lengthscale
 !rscala=30.*kpc_to_cm  !needed for variable kappa
 kappa=0.11*vturb*lturb
+kappa=1.32e29
 
 !! do j=1,jmax    !! for making kappa non constant
 !!!    kappa(j)=0.11*vturb*lturb   !! constant !!
@@ -241,9 +241,6 @@ kappa=0.11*vturb*lturb
 !! enddo
 !close(20)
 
-
-!! Here start the time integration (use FTCS method)
-print*,'start time integration cycle'
 tend=tnow
 time0=tnow-5.*1.e9*years_to_seconds
 time=time0
@@ -252,27 +249,27 @@ dt=0.4*(r(5)-r(4))**2/(2.*kappa)  !! ok for Delta_r costant !!
 !print*,real(dt/years_to_seconds) !!check time step
 !print*,real(time/years_to_seconds)
 
-
-!! write the source terms (SNIa and stellar winds)
-slope=1.1
-alphast=4.7e-20*(time/tnow)**(-1.26)
-alphasn=4.436e-20*(snu/aml)*(time/tnow)**(-slope)
-
-!!  print*,'alphast,sn = ',alphast,alphasn
-
-do j=2,jmax-2
-   rhofedot(j)=(alphast*zfest(j)/1.4+alphasn*zfesn)*rhost(j)
-enddo
-
+!! Here start the time integration (use FTCS method)
+print*,'start time integration cycle'
 do while (time>0 .and. time<=tend)    !!start the main time cycle
-   gradzfe(1) = 0. !!boundary conditions, reset at each iteration?
-   gradzfe(jmax) = 0.
    !! the equation to be solved is d(n*zfe)/dt = div(kappa*n*grad(zfe)) + S
    !! (according to Rebusco et al. 2006)
    !! Use the FTCS scheme.
 
+!! write the source terms (SNIa and stellar winds), slide 34
+   slope=1.1
+   alphast=4.7e-20*(time/tnow)**(-1.26) !Star rate
+   alphasn=4.436e-20*(snu/aml) !*(time/tnow)**(-slope) !Supernovae Ia rate !make time independent
+   
+   !!  print*,'alphast,sn = ',alphast,alphasn
+   
+   do j=2,jmax-2
+      rhofedot(j)=(alphast*zfest(j)/1.4+alphasn*zfesn)*rhost(j) !eq in slide 35
+   enddo
+
 !goto 776 !to skip source and check diffusion
 !! source step
+
 do j=2,jmax-1
    !!!    write(70,*)rhofe(j),dt*rhofedot(j)
    !!!    if(j.eq.5)print*,'azz ',dt,rhofe(j),dt*rhofedot(j),rhofedot(j)
@@ -289,12 +286,9 @@ do j=2,jmax-1
 
 !776   continue
 
-  
+  goto 777 !to skip the diffusive part
 !  diffusive step   !  check the Fe conservation !
    do j=2,jmax-1 !don't touch boundary
-      zfe(j)=1.4*rhofe(j)/rho(j) !source part
-
-      !goto777 !to check source and skip diffusion
       gradzfe(j)=(zfe(j)-zfe(j-1))/(rr(j)-rr(j-1))  !! dZ/dr centered at "j" !!
       rhojp1=0.5*(rho(j+1)+rho(j))  !! rho centered at "j+1" !!
       rhoj=0.5*(rho(j-1)+rho(j))    !! rho centered at "j" !!
@@ -303,12 +297,14 @@ do j=2,jmax-1
               -r(j)**2*kappa*rhoj*gradzfe(j)) / (0.33333333*(r(j+1)**3-r(j)**3))
       zfe(j)=1.4*rhofe(j)/rho(j)  !! update Z_Fe with the new rho_Fe !!
     enddo
+    gradzfe(1) = 0. !!boundary conditions, reset at each iteration?
+    gradzfe(jmax) = 0.
     
-    zfe(1)=zfe(2) !reset boundary conditions for the diffusion test (outflows)
+    zfe(1)=zfe(2) !reset boundary conditions (outflows)
     zfe(jmax)=zfe(jmax-1)
     rhofe(1)=rhofe(2)
     rhofe(jmax)=rhofe(jmax-1)
-    !777   continue
+    777   continue
 
     if(time>=(time0+1e9*years_to_seconds - 5.1780151e12) .and. time<=(time0+ 1e9*years_to_seconds + 5.1780151e12)) then
       open(20,file='Fe_1Gyr.dat',status='unknown')
@@ -318,10 +314,10 @@ do j=2,jmax-1
          amfe(j)=amfe(j-1)+rhofe(j-1)*vol(j)
       enddo
       do j=1,jmax
-         write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun
+         write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun, (zfeobs(j)-zfe(j))/zfesol
       enddo
       close(20)
-      1700 format(4(1pe12.4))
+      1700 format(5(1pe12.4))
       !print*,'masses at 2 Gyr'
       !write(6,3002)amfe(jmax)/mSun,amfeiniz(jmax)/mSun,amfeobs(jmax)/mSun
       !write(6,3003)amfe(180)/mSun,amfeiniz(180)/mSun,amfeobs(180)/mSun
@@ -335,7 +331,7 @@ do j=2,jmax-1
             amfe(j)=amfe(j-1)+rhofe(j-1)*vol(j)
          enddo
          do j=1,jmax
-            write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun
+            write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun, (zfeobs(j)-zfe(j))/zfesol
          enddo
          close(20)
          !print*,'masses at 2 Gyr'
@@ -350,7 +346,7 @@ do j=2,jmax-1
          amfe(j)=amfe(j-1)+rhofe(j-1)*vol(j)
       enddo
       do j=1,jmax
-         write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun
+         write(20,1700)rr(j)/kpc_to_cm,zfe(j)/zfesol, rhofe(j), amfe(j)/mSun, (zfeobs(j)-zfe(j))/zfesol
       enddo
       close(20)
       !print*,'masses at 5 Gyr'
@@ -370,12 +366,12 @@ do j=2,jmax
 enddo
 
 !need to calculate total mass of Fe and check conservation
-write(6,3002)amfe(jmax)/mSun,amfeiniz(jmax)/mSun,amfeobs(jmax)/mSun
+write(6,3002)amfe(jmax)/mSun,amfeiniz(jmax)/mSun,amfeobs(jmax)/mSun, (zfeobs(jmax)-zfe(jmax))/zfesol
 !mass of Fe at 100 kpc
-write(6,3003)amfe(180)/mSun,amfeiniz(180)/mSun,amfeobs(180)/mSun
-3002  format('M_Fe(tot), M_Fein(tot) (Msol) = ',3(1pe12.4))
-3003  format('M_Fe(100kpc), M_Fein(100kpc) (Msol) = ',3(1pe12.4))
+write(6,3003)amfe(180)/mSun,amfeiniz(180)/mSun,amfeobs(180)/mSun, (zfeobs(180)-zfe(180))/zfesol
+3002  format('M_Fe(tot), M_Fein(tot) (mSun) = ',3(1pe12.4))
+3003  format('M_Fe(100kpc), M_Fein(100kpc) (mSun) = ',3(1pe12.4))
 
 
 stop
-end 
+end program diffusion
