@@ -12,8 +12,8 @@ set autoscale # scale axes automatically
  set key outside
 
  plot "zfe_initial.dat" using 1:2 title 'Fe abundance at time0' with lines lt rgb "black"
- replot "zfe_initial.dat" using 1:3 title 'observed Fe abundance' with lines lt rgb "blue"
+ replot "zfe_initial.dat" using 1:3 title 'Fe abundance obserrved -zout' with lines lt rgb "blue"
  replot "Fe_5Gyr.dat" using 1:2 title 'Fe abundance at 5 Gyr' with lines lt rgb "purple"
- replot "Fe_5Gyr.dat" using 1:5 title 'Fe abundance at 5 Gyr' with lines lt rgb "red"
+ replot "zfe_initial.dat" using 1:7 title 'Fe abundance observed at 5 Gyr' with lines lt rgb "red"
  
 

@@ -7,7 +7,7 @@ set autoscale # scale axes automatically
  set xlabel "r(kpc)"
  set ylabel "M_F_e/M_S_u_n"
  set logscale x
- set logscale y
+ #set logscale y #occhio perché per z=0 non riesce a plottare log(0)
  set key at 0.01,100
  set key outside
 

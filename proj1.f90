@@ -47,7 +47,7 @@ amfeiniz(jmax), amfeobs(jmax), gradzfe(jmax), amfe(jmax), rhofedot(jmax)
 real*8,parameter::aml=7.5    !! this is the mass to light ratio 
 real*8,parameter::zfesol=1.8e-3 !Solar metallicity
 real*8,parameter::zfesn=0.744/1.4
-real*8,parameter::snu=1.1 !supernova unit  = number of SNIa per Luminosity per century [0.05-0.5] at present, slide 35
+real*8,parameter::snu=0.05 !1.1 !supernova unit  = number of SNIa per Luminosity per century [0.05-0.5] at present, slide 35
 real*8,parameter::tnow=13.7*1.e9*years_to_seconds
 real*8::lturb, kappa, vturb, slope
 
@@ -75,7 +75,7 @@ close(20)
 do j=1,jmax
    x=rr(j)/rs !rho centered with r at r(j+1/2)
    rhonfw(j)=rho0nfw/(x*(1.+x)**2) !DM density, Navarro Frenk White profile
-   !rhost(j)=mbcg/(2.*pi)*(ahern/rr(j))/(ahern+rr(j))**3 !for second part, stellar density
+   rhost(j)=mbcg/(2.*pi)*(ahern/rr(j))/(ahern+rr(j))**3 !for second part, stellar density
 enddo
 !change rho0 central gas density to get Mbaryonic/Mtot = 0.16-0.17 (try to automatize)
 !correct hydrostatic eq equation with Temperature gradient
@@ -187,7 +187,7 @@ do j=1,jmax
    zfeobs(j)=zfesol*0.3*1.4*1.15*(2.2+x**3)/(1+x**3)/1.15  !Perseus! First approach: observed Fe profile from XMM Newton Data, reduced to fit Chandra obs slide 39
    zfeobs(j)=zfeobs(j) - zfeout   !! subtract background abundance to get the excess 
    zfeobs(j)=max(zfeobs(j),0.)
-   zfe(j)= zfeobs(j)  !!0. !!zfeout !!zfeobs(j)  !! which initial zfe? !! used for adding diffusion and source
+   zfe(j)= 0. !zfeobs(j)  !!0. !!zfeout !!zfeobs(j)  !! which initial zfe? !! used for adding diffusion and source
    rhofe(j)=rho(j)*zfe(j)/1.4
    rhofeobs(j)=rho(j)*zfeobs(j)/1.4
    zfest(j)=1.*zfesol    !! set the stellar abundance !! for source 
@@ -206,12 +206,12 @@ open(10,file='zfe_initial.dat')
 open(20,file='initial.dat',status='unknown')
 do j=1,jmax
    write(10,1500)rr(j)/kpc_to_cm, zfe(j)/zfesol, zfeobs(j)/zfesol, &
-                 r(j)/kpc_to_cm,amfeiniz(j)/mSun,amfeobs(j)/mSun
+                 r(j)/kpc_to_cm, amfeiniz(j)/mSun, amfeobs(j)/mSun, (zfeobs(j)+zfeout)/zfesol
    write(20,3001)rr(j)/kpc_to_cm,zfe(j)/zfesol,zfeobs(j)/zfesol
 enddo
 close(10)
 close(20)
-1500 format(6(1pe12.4))
+1500 format(7(1pe12.4))
 3001  format(4(1pe12.4))
 
 !have to overplot quantities at pag 42 and compare
@@ -231,7 +231,7 @@ vturb=260.e5   !! like Perseus !! turbulent velocity
 lturb=15.*kpc_to_cm  !! this is quite uncertain !! turbulence lengthscale
 !rscala=30.*kpc_to_cm  !needed for variable kappa
 kappa=0.11*vturb*lturb
-kappa=1.32e29
+kappa=1.e30
 
 !! do j=1,jmax    !! for making kappa non constant
 !!!    kappa(j)=0.11*vturb*lturb   !! constant !!
@@ -241,9 +241,10 @@ kappa=1.32e29
 !! enddo
 !close(20)
 
-tend=tnow
+
 time0=tnow-5.*1.e9*years_to_seconds
 time=time0
+tend= tnow
 !! calculate the timestep (to be modified if the grid is non-uniform)
 dt=0.4*(r(5)-r(4))**2/(2.*kappa)  !! ok for Delta_r costant !!
 !print*,real(dt/years_to_seconds) !!check time step
@@ -258,7 +259,7 @@ do while (time>0 .and. time<=tend)    !!start the main time cycle
 
 !! write the source terms (SNIa and stellar winds), slide 34
    slope=1.1
-   alphast=4.7e-20*(time/tnow)**(-1.26) !Star rate
+   alphast=4.7e-20 !*(time/tnow)**(-1.26) !Star rate
    alphasn=4.436e-20*(snu/aml) !*(time/tnow)**(-slope) !Supernovae Ia rate !make time independent
    
    !!  print*,'alphast,sn = ',alphast,alphasn
@@ -275,6 +276,7 @@ do j=2,jmax-1
    !!!    if(j.eq.5)print*,'azz ',dt,rhofe(j),dt*rhofedot(j),rhofedot(j)
        rhofe(j)=rhofe(j) + dt*rhofedot(j)
        zfe(j)=rhofe(j)/rho(j) * 1.4
+       !if(j==10.) print*, dt/years_to_seconds, rhofedot(j), rhost(j)
     enddo
    
    !! set the boundary conditions (outflows)
@@ -286,7 +288,7 @@ do j=2,jmax-1
 
 !776   continue
 
-  goto 777 !to skip the diffusive part
+!goto 777 !to skip the diffusive part
 !  diffusive step   !  check the Fe conservation !
    do j=2,jmax-1 !don't touch boundary
       gradzfe(j)=(zfe(j)-zfe(j-1))/(rr(j)-rr(j-1))  !! dZ/dr centered at "j" !!
@@ -304,7 +306,7 @@ do j=2,jmax-1
     zfe(jmax)=zfe(jmax-1)
     rhofe(1)=rhofe(2)
     rhofe(jmax)=rhofe(jmax-1)
-    777   continue
+   !777   continue
 
     if(time>=(time0+1e9*years_to_seconds - 5.1780151e12) .and. time<=(time0+ 1e9*years_to_seconds + 5.1780151e12)) then
       open(20,file='Fe_1Gyr.dat',status='unknown')
